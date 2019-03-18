@@ -35,9 +35,12 @@ int main(int argc, char** argv)
   // and https://en.cppreference.com/w/cpp/types/is_standard_layout
   MPI_Get_address(&data, &base);
   //Have to subtract the base address as well
-  MPI_Get_address(&data.a, &displacements[0]); displacements[0] -= base;
-  MPI_Get_address(&data.b, &displacements[1]); displacements[1] -= base;
-  MPI_Get_address(&data.c, &displacements[2]); displacements[2] -= base;
+  MPI_Get_address(&data.a, &displacements[0]);
+  MPI_Get_address(&data.b, &displacements[1]);
+  MPI_Get_address(&data.c, &displacements[2]);
+  displacements[0] = MPI_Aint_diff(displacements[0], base);
+  displacements[1] = MPI_Aint_diff(displacements[1], base);
+  displacements[2] = MPI_Aint_diff(displacements[2], base);
 
   types[0] = MPI_INT; types[1] = MPI_INT; types[2] = MPI_FLOAT;
   //Lengths are in multiples of the associated type

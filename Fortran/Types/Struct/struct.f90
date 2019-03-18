@@ -42,7 +42,9 @@ PROGRAM type
   !MPI_Get_address gets the absolute address from MPI_BOTTOM so you have to
   !subtract the location of the base of your type from the displacements of
   !the elements
-  displacements = displacements - base
+  displacements(1) = MPI_Aint_diff(displacements(1), base)
+  displacements(2) = MPI_Aint_diff(displacements(2), base)
+  displacements(3) = MPI_Aint_diff(displacements(3), base)
 
   IF (rank == 0) THEN
     PRINT "(A, I4, I4, I4)", "Byte offsets are ", displacements
