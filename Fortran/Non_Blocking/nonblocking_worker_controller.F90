@@ -18,7 +18,7 @@ MODULE prime_helpers
   INTEGER, PARAMETER :: ISPRIME = 2, ISCOMP = 1, ISUNCHECKED = 0
 
   INTEGER(KIND=INT64), PARAMETER :: small_primes_len = 20, max_small_prime = 71
-  INTEGER(KIND=INT64), DIMENSION(20), PARAMETER :: small_primes = &
+  INTEGER(KIND=INT64), DIMENSION(small_primes_len), PARAMETER :: small_primes = &
     (/2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71/)
 
   CONTAINS

@@ -5,10 +5,10 @@
 #include <mpi.h>
 
 
-/* A worker-controller model for finding all primes within a given interval. 
+/* A worker-controller model for finding all primes within a given interval.
 Each worker checked primality of a single number
   This is optimised a bit - it tests only the numbers in small_primes first, then from max_small_prime it tests every odd number, returning at the first factor it finds
-The master dispatches the numbers to test. 
+The master dispatches the numbers to test.
 
 In the Non-blocking version, the master also does some cheap work to trim the list of candidates using a sieve method. This significantly reduces the number of tests the workers have to do
 
@@ -20,7 +20,7 @@ THIS CODE IS NOT OPTIMAL - it is an example. For instance, we should ignore even
 #define ISUNCHECKED 0
 
 //In real working code this should be done more carefully
-const long small_num = 20;
+const long small_primes_len = 20;
 const long small_primes[20] = {2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71};
 const long max_small_prime = 71;
 
@@ -49,7 +49,7 @@ void precheck_flags(char* flags, long len, long lower, long stride);
     MPI_Comm_size(MPI_COMM_WORLD, &nproc);
 
     // Allocate all the arrays per worker ...
-    
+
     // Keep track of what each worker is working on
     current_packages = (long *) calloc(nproc, sizeof(long));
 
@@ -71,9 +71,9 @@ void precheck_flags(char* flags, long len, long lower, long stride);
     for(;;) {
 
       //Recieve and unpack the results
-      
+
       //Tag is used for operational info - is this a ready/done signal, or a result?
-      
+
       //Wait to receive any data. On the first pass tag will be 0 which is
       //Just the workers saying that they are ready
       MPI_Irecv(&result, 1, MPI_CHAR, MPI_ANY_SOURCE, MPI_ANY_TAG,
@@ -172,17 +172,17 @@ void precheck_flags(char* flags, long len, long lower, long stride);
 
     char result;
     long index, end;
-    
+
     end = ceil(sqrt((double) num));
 
     result = ISPRIME;
     //First check against the small primes
-    for(index = 0; index < small_num; index++){
+    for(index = 0; index < small_primes_len; index++){
       if (num%small_primes[index] == 0){
         return ISCOMP;
       }
     }
-    
+
     //Test higher numbers, skipping all the evens
     for (index = max_small_prime + 2; index <= end; index += 2){
       if (num%index == 0){
@@ -197,7 +197,7 @@ void precheck_flags(char* flags, long len, long lower, long stride){
 
   long st = stride-lower%stride;
   long i;
-  
+
   for(i=st; i<len; i+=stride){
     flags[i] = ISCOMP;
   }
@@ -247,12 +247,12 @@ int main(int argc, char** argv)
   } else {
     worker_fn();
   }
-  
+
 /*  if(rank ==0) printf("Is prime %d\n", check_prime(32452843));
   if(rank ==0) printf("Is prime %d\n", check_prime(32452842));
 */
 
   MPI_Finalize();
-  
+
   return 0;
 }
