@@ -64,10 +64,10 @@ MODULE controller
 
   CONTAINS
 
-  SUBROUTINE dispatcher(lower, upper, len, flag_array)
+  SUBROUTINE dispatcher(lower, len, flag_array)
 
 
-    INTEGER(KIND=INT64) :: lower, upper, len
+    INTEGER(KIND=INT64) :: lower, len
     INTEGER(KIND=INT8), DIMENSION(:) :: flag_array
 
     INTEGER :: nproc, worker_num, inflight, ierr
@@ -86,8 +86,6 @@ MODULE controller
     INTEGER(KIND=INT64), DIMENSION(:), ALLOCATABLE :: current_packages, packages_processed
 
     DOUBLE PRECISION, DIMENSION(:), ALLOCATABLE :: start_times, end_times, cum_times
-
-    CHARACTER :: inp
 
     CALL MPI_Comm_size(MPI_COMM_WORLD, nproc, ierr)
 
@@ -263,8 +261,8 @@ PROGRAM wc
 
   IMPLICIT NONE
 
-  INTEGER :: rank, nproc, i, total, ierr
-  INTEGER(KIND=INT64) :: lower_bound, upper_bound, len
+  INTEGER :: rank, nproc, total, ierr
+  INTEGER(KIND=INT64) :: lower_bound, upper_bound, len, i
 
   INTEGER(KIND=INT8), DIMENSION(:), ALLOCATABLE :: flags
 
@@ -311,7 +309,7 @@ PROGRAM wc
 
   IF (rank == 0) THEN
 
-    CALL dispatcher(lower_bound, upper_bound, len, flags)
+    CALL dispatcher(lower_bound, len, flags)
     total = 0
 
     DO i = 1, len
