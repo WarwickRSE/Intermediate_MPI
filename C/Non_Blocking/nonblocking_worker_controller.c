@@ -19,7 +19,7 @@ THIS CODE IS NOT OPTIMAL - it is an example. For instance, we should ignore even
 #define ISCOMP 1
 #define ISUNCHECKED 0
 
-//In real working code this should be done more carefully 
+//In real working code this should be done more carefully
 const long small_num = 20;
 const long small_primes[20] = {2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71};
 const long max_small_prime = 71;
@@ -135,7 +135,7 @@ void precheck_flags(char* flags, long len, long lower, long stride);
     }
 
     for(worker_num = 0; worker_num < nproc-1; ++worker_num){
-      printf("Worker %3i checked %3li primes in %5.4g seconds\n",
+      printf("Worker %3i checked %3li candidates in %5.4g seconds\n",
           worker_num+1, packages_processed[worker_num], cum_times[worker_num]);
     }
   }
@@ -239,7 +239,7 @@ int main(int argc, char** argv)
     total = 0;
     for( i=0; i < len; i++){
       if(flags[i] == ISPRIME){
-        //printf("%li, ", lower_bound+i);
+        //printf("%li\n", lower_bound+i);
         total ++;
       }
     }
