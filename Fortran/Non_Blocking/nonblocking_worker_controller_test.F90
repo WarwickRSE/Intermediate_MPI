@@ -126,14 +126,8 @@ MODULE controller
 
       ! Controller does some low effort work while workers can run
       IF(.NOT. skip_precheck) THEN
-        CALL precheck_flags(flag_array, len, lower, &
-          small_primes(next_precheck_index))
-        next_precheck_index = next_precheck_index + 1
-        IF(next_precheck_index > stop_precheck) skip_precheck = .TRUE.
+        stat = precheck_flags_all(flag_array, len, lower, request)
       END IF
-
-      ! Work is done, so now wait for a response
-      CALL MPI_Wait(request, stat, ierr)
 
       !We have to get this information from the status variable because
       !we received the message with MPI_ANY_SOURCE and MPI_ANY_TAG
@@ -198,21 +192,53 @@ MODULE controller
 
   END SUBROUTINE
 
-  SUBROUTINE precheck_flags(flags, len, lower, stride)
+  FUNCTION precheck_flags_all(flags, len, lower, request) RESULT(stat)
 
     !Knock out all the multiples of stride in flags
 
+    INTEGER, DIMENSION(MPI_Status_size) :: stat
+    INTEGER :: request, ierr
     INTEGER(KIND=INT8), DIMENSION(:) :: flags
-    INTEGER(KIND=INT64), INTENT(IN) :: len, lower, stride
-    INTEGER(KIND=INT64) :: st, i
+    INTEGER(KIND=INT64), INTENT(IN) :: len, lower
+    INTEGER(KIND=INT64), SAVE :: stride_index = 1, index_reached = 1
+    INTEGER, SAVE :: prechecker_runs = 0
+    LOGICAL, SAVE :: finished = .FALSE.
+    INTEGER(KIND=INT64) :: st, stride
+    LOGICAL :: request_flag
 
-    st = stride - MOD(lower, stride) + 1
+    IF (.NOT. finished) THEN
+      prechecker_runs = prechecker_runs + 1
+      DO WHILE(stride_index < small_primes_len)
 
-    DO i = st, len, stride
-      flags(i) = ISCOMP
-    END DO
+        !See if time to exit or should go on
+        CALL MPI_Test(request, request_flag, stat, ierr)
+        IF (request_flag) RETURN
 
-  END SUBROUTINE
+        stride = small_primes(stride_index)
+        st = stride - MOD(lower, stride) + 1
+
+        IF(index_reached == 1) index_reached = st
+
+        DO WHILE(index_reached < len)
+          flags(index_reached) = ISCOMP
+          ! We could also do the test here, but it is heavy, so this works but
+          !kills our performance
+          ! CALL MPI_Test(request, request_flag, stat, ierr)
+          !IF (request_flag) RETURN stat
+          index_reached = index_reached + stride
+        END DO
+        index_reached = 1
+        stride_index = stride_index + 1
+      END DO
+    END IF
+    if(.NOT. finished) PRINT*, "Prechecker ran ", prechecker_runs, " times"
+    finished = .TRUE.
+
+    !All done, wait until request completes
+    CALL MPI_Wait(request, stat, ierr)
+    RETURN
+
+  END FUNCTION
 
 END MODULE controller
 

@@ -25,7 +25,7 @@ const long small_primes[20] = {2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 4
 const long max_small_prime = 71;
 
 char check_prime(long num);
-void precheck_flags(char* flags, long len, long lower, long stride);
+MPI_Status precheck_flags_all(char* flags, long len, long lower, MPI_Request request);
 
 
   void dispatcher_fn(long lower, long upper, long len, char* flag_array)
@@ -80,12 +80,7 @@ void precheck_flags(char* flags, long len, long lower, long stride);
           MPI_COMM_WORLD, &request);
 
       //Controller does some low effort work while workers can run
-      if(skip_precheck !=1) precheck_flags(flag_array, len, lower, small_primes[next_precheck_index]);
-      next_precheck_index ++;
-      if(next_precheck_index > stop_precheck) skip_precheck = 1;
-
-      // Work is done, so now wait for a response
-      MPI_Wait(&request, &stat);
+      if(skip_precheck !=1) stat = precheck_flags_all(flag_array, len, lower, request);
 
       //We have to get this information from the status variable because
       //we received the message with MPI_ANY_SOURCE and MPI_ANY_TAG
@@ -194,15 +189,47 @@ void precheck_flags(char* flags, long len, long lower, long stride);
     return result;
   }
 
-void precheck_flags(char* flags, long len, long lower, long stride){
-  //Knock out all the multiples of stride
+MPI_Status precheck_flags_all(char* flags, long len, long lower, MPI_Request request){
+  //Knock out all the multiples of small_primes
+  //This function should smoothly restart after an exit
+  //It also takes an MPI request and should exit once there is other work to be done
 
-  long st = stride-lower%stride;
-  long i;
+  MPI_Status stat;
+  int request_flag;
+  static long stride_index=0;
+  static long index_reached=0;
+  static int finished = 0, prechecker_runs = 0;
+  long st, stride;
 
-  for(i=st; i<len; i+=stride){
-    flags[i] = ISCOMP;
+
+  if (!finished){
+    prechecker_runs ++;
+    for(; stride_index < small_primes_len; stride_index++){
+
+      //See if time to exit or should go on
+      MPI_Test(&request, &request_flag, &stat);
+      if (request_flag) return stat;
+
+      stride = small_primes[stride_index];
+      st = stride-lower%stride;
+      if(index_reached == 0) index_reached = st;
+      for(; index_reached<len; index_reached+=stride){
+        flags[index_reached] = ISCOMP;
+        /* We could also do the test here, but it is heavy, so this works but
+        kills our performance
+        /MPI_Test(&request, &request_flag, &stat);
+        if (request_flag) return stat;*/
+
+      }
+      index_reached = 0;
+    }
   }
+  if(!finished) printf("Prechecker ran %i times\n", prechecker_runs);
+  finished = 1;
+  //All done, wait until request completes
+  MPI_Wait(&request, &stat);
+  return stat;
+  
 }
 
 int main(int argc, char** argv)
