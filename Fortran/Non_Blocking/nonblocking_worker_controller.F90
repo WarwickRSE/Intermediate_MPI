@@ -124,6 +124,7 @@ MODULE controller
       CALL MPI_Irecv(result, 1, MPI_INTEGER1, MPI_ANY_SOURCE, MPI_ANY_TAG, &
           MPI_COMM_WORLD, request, ierr)
 
+      ! Controller does some low effort work while workers can run
       IF(.NOT. skip_precheck) THEN
         CALL precheck_flags(flag_array, len, lower, &
           small_primes(next_precheck_index))
@@ -131,6 +132,7 @@ MODULE controller
         IF(next_precheck_index > stop_precheck) skip_precheck = .TRUE.
       END IF
 
+      ! Work is done, so now wait for a response
       CALL MPI_Wait(request, stat, ierr)
 
       !We have to get this information from the status variable because

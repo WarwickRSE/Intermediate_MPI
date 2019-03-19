@@ -79,10 +79,12 @@ void precheck_flags(char* flags, long len, long lower, long stride);
       MPI_Irecv(&result, 1, MPI_CHAR, MPI_ANY_SOURCE, MPI_ANY_TAG,
           MPI_COMM_WORLD, &request);
 
+      //Controller does some low effort work while workers can run
       if(skip_precheck !=1) precheck_flags(flag_array, len, lower, small_primes[next_precheck_index]);
       next_precheck_index ++;
       if(next_precheck_index > stop_precheck) skip_precheck = 1;
 
+      // Work is done, so now wait for a response
       MPI_Wait(&request, &stat);
 
       //We have to get this information from the status variable because
