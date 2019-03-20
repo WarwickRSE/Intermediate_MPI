@@ -32,27 +32,35 @@ def precheck_flags(lower, length, flags, index):
 
 def controller(lower, upper):
 
+  #Set up the basic MPI stuff
   comm = MPI.COMM_WORLD
   nproc = comm.Get_size()
   rank = comm.Get_rank()
 
+  #Setup values for array of flags
   length = upper - lower
   flags = numpy.zeros(length)
+  #Offset of last dispatched value
   current_val = 0
+
+  #Number of in-flight work packets
   inflight = 0
 
   precheck_num = 0
   #How many primes to process
   precheck_to = 20
 
-
+  #Arrays holding data per worker:
+  #Value last sent to worker
   vals_in_use = numpy.zeros(nproc-1)
+
+  #Workers stats - how many processed in how long
   processed = numpy.zeros(nproc-1)
   start_time = numpy.zeros(nproc-1)
   cum_time = numpy.zeros(nproc-1)
   end_time = numpy.zeros(nproc-1)
 
-
+  #Some things need to have the correct type BEFORE the MPI calls
   info = MPI.Status()
   request = MPI.Request()
   while True:
@@ -65,6 +73,7 @@ def controller(lower, upper):
     # First param is buffer size in bytes.
     request = comm.irecv(4, source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG)
 
+    #Do some work before waiting
     if precheck_num < precheck_to:
       precheck_flags(lower, length, flags, precheck_num)
       precheck_num = precheck_num + 1
@@ -72,17 +81,21 @@ def controller(lower, upper):
     result = request.wait(status=info)
 
     if info.tag > 0:
+      # Capture stats
       end_time[info.source-1] = time.time()
       cum_time[info.source-1] = cum_time[info.source-1] + (end_time[info.source-1] - start_time[info.source-1])
       processed[info.source-1] = processed[info.source-1] + 1
       offset = vals_in_use[info.source-1] - lower
-      #Cheat - if prime mark as 2, (True + 1)
+      #Store result
+      #Cheat - if prime mark as 2, (True + 1), else as composite, 1 (False+1)
       flags[int(offset)] = result + 1
       inflight = inflight - 1
 
     if current_val < length:
+      #If there is still work to do, reply with next package
 
-      #Skip any values that have already been checked
+      #Skip any values that have already been checked i.e. are 1 or 2
+      #The precheck_flags routine may mark some things as composite
       while flags[current_val] != 0 and current_val < length:
         current_val = current_val + 1
 
@@ -98,30 +111,37 @@ def controller(lower, upper):
       comm.send(1, dest=info.source, tag=0)
 
     if inflight == 0:
+      #Nothing is in flight, all done
       break
 
   #Summarize findings
   for i in range(0, nproc-1):
     print("Worker ", i, " processed ", int(processed[i-1]), " packets in ", cum_time[i-1], "s")
 
+  #Total the number of elements marked prime (==2) and divide by 2 to get number
   print("Found ", int(numpy.sum(flags[flags == 2])/2), " primes")
 
 
 def worker():
+
   comm = MPI.COMM_WORLD
 
+  #Send initial message with dummy data and tag =0 for "ready"
   data = False
   comm.send(data, dest=0, tag=0)
 
   while True:
+    #Wait for a message
     tag = 0
     info = MPI.Status()
     candidate = comm.recv(source=0, tag=MPI.ANY_TAG, status=info)
     tag = info.tag
     if(tag > 0):
+      #Got number to check, check and return
       result = check_prime(candidate)
       comm.send(result, dest=0, tag=tag)
     else:
+      #Shutdown - nothing more to do
       return
 
 def main(lower, upper):
@@ -139,6 +159,7 @@ if __name__ == "__main__":
    comm = MPI.COMM_WORLD
    rank = comm.Get_rank()
 
+   #Take two values describing range to check, [lower, upper]
    if(rank ==0):
      try:
        lower = int(input('Enter lower bnd: '))

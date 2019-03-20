@@ -1,7 +1,6 @@
 from mpi4py import MPI as MPI
 import time
 from math import sqrt, trunc
-import csv
 import numpy
 
 primes = []
@@ -20,52 +19,54 @@ def check_prime(num):
       break
   return not has_divisor
 
-def read_primes(num):
-
-  global primes
-  infile=open('primes.txt')
-  csvReader = csv.reader(infile)
-  primes = list(csvReader)
-  primes = primes[0]
-  primes = [int(i) for i in primes if int(i) < num]
-
-def precheck_flags(num):
-
-  has_divisor = False
-  global primes
-  global flags
-
 def controller(lower, upper):
 
+  #Set up the basic MPI stuff
   comm = MPI.COMM_WORLD
   nproc = comm.Get_size()
   rank = comm.Get_rank()
 
+  #Setup values for array of flags
   length = upper - lower
   flags = numpy.zeros(length)
+  #Offset of last dispatched value
   current_val = 0
+
+  #Number of in-flight work packets
   inflight = 0
+
+  #Arrays holding data per worker:
+  #Value last sent to worker
   vals_in_use = numpy.zeros(nproc-1)
+
+  #Workers stats - how many processed in how long
   processed = numpy.zeros(nproc-1)
   start_time = numpy.zeros(nproc-1)
   cum_time = numpy.zeros(nproc-1)
   end_time = numpy.zeros(nproc-1)
 
-
+  #Some things need to have the correct type BEFORE the MPI calls
   info = MPI.Status()
 
   while True:
+    #Wait for message from workers
+    # On first pass we expect to get info.tag of zero signalling "ready"
+    # After that we get a non-zero tag signalling "done"
     result = comm.recv(source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG, status=info)
 
     if info.tag > 0:
+      # Capture stats
       end_time[info.source-1] = time.time()
       cum_time[info.source-1] = cum_time[info.source-1] + (end_time[info.source-1] - start_time[info.source-1])
       processed[info.source-1] = processed[info.source-1] + 1
+      #Store result
+      #Result is True (1) if prime, False (0) else
       offset = vals_in_use[info.source-1] - lower
       flags[int(offset)] = result
       inflight = inflight - 1
 
     if current_val < length:
+      #If there is still work to do, reply with next package
       vals_in_use[info.source-1] = lower + current_val
       #print("Dispatching ", lower+current_val)
 
@@ -78,6 +79,7 @@ def controller(lower, upper):
       comm.send(1, dest=info.source, tag=0)
 
     if inflight == 0:
+      #Nothing is in flight, all done
       break
 
   #Summarize findings
@@ -87,20 +89,25 @@ def controller(lower, upper):
   print("Found ", int(numpy.sum(flags)), " primes")
 
 def worker():
+
   comm = MPI.COMM_WORLD
 
+  #Send initial message with dummy data and tag =0 for "ready"
   data = False
   comm.send(data, dest=0, tag=0)
 
   while True:
+    #Wait for a message
     tag = 0
     info = MPI.Status()
     candidate = comm.recv(source=0, tag=MPI.ANY_TAG, status=info)
     tag = info.tag
     if(tag > 0):
+      #Got number to check, check and return
       result = check_prime(candidate)
       comm.send(result, dest=0, tag=tag)
     else:
+      #Shutdown - nothing more to do
       return
 
 def main(lower, upper):
@@ -118,6 +125,7 @@ if __name__ == "__main__":
    comm = MPI.COMM_WORLD
    rank = comm.Get_rank()
 
+   #Take two values describing range to check, [lower, upper]
    if(rank ==0):
      try:
        lower = int(input('Enter lower bnd: '))
