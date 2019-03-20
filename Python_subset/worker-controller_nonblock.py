@@ -1,10 +1,9 @@
 from mpi4py import MPI as MPI
 import time
 from math import sqrt, trunc
-import csv
 import numpy
 
-primes = []
+primes = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71]
 
 def check_prime(num):
 
@@ -20,20 +19,16 @@ def check_prime(num):
       break
   return not has_divisor
 
-def read_primes(num):
-
-  global primes
-  infile=open('primes.txt')
-  csvReader = csv.reader(infile)
-  primes = list(csvReader)
-  primes = primes[0]
-  primes = [int(i) for i in primes if int(i) < num]
-
-def precheck_flags(num):
+def precheck_flags(lower, length, flags, index):
 
   has_divisor = False
   global primes
-  global flags
+
+  stride = primes[index]
+  start = stride - lower%stride
+  for i in range(start, length, stride):
+    #Mark as composite
+    flags[i] = 1
 
 def controller(lower, upper):
 
@@ -45,6 +40,12 @@ def controller(lower, upper):
   flags = numpy.zeros(length)
   current_val = 0
   inflight = 0
+
+  precheck_num = 0
+  #How many primes to process
+  precheck_to = 20
+
+
   vals_in_use = numpy.zeros(nproc-1)
   processed = numpy.zeros(nproc-1)
   start_time = numpy.zeros(nproc-1)
@@ -53,19 +54,38 @@ def controller(lower, upper):
 
 
   info = MPI.Status()
-
+  request = MPI.Request()
   while True:
-    result = comm.recv(source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG, status=info)
+
+    #Use non-blocking commands although this variant could just as well use blocking
+    #and not post the recieve until after it did the pre-check
+
+    # Unlike normal MPI, irecv here takes a buffer size only and
+    # the actual result is returned by the wait
+    # First param is buffer size in bytes.
+    request = comm.irecv(4, source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG)
+
+    if precheck_num < precheck_to:
+      precheck_flags(lower, length, flags, precheck_num)
+      precheck_num = precheck_num + 1
+
+    result = request.wait(status=info)
 
     if info.tag > 0:
       end_time[info.source-1] = time.time()
       cum_time[info.source-1] = cum_time[info.source-1] + (end_time[info.source-1] - start_time[info.source-1])
       processed[info.source-1] = processed[info.source-1] + 1
       offset = vals_in_use[info.source-1] - lower
-      flags[int(offset)] = result
+      #Cheat - if prime mark as 2, (True + 1)
+      flags[int(offset)] = result + 1
       inflight = inflight - 1
 
     if current_val < length:
+
+      #Skip any values that have already been checked
+      while flags[current_val] != 0 and current_val < length:
+        current_val = current_val + 1
+
       vals_in_use[info.source-1] = lower + current_val
       #print("Dispatching ", lower+current_val)
 
@@ -84,7 +104,8 @@ def controller(lower, upper):
   for i in range(0, nproc-1):
     print("Worker ", i, " processed ", int(processed[i-1]), " packets in ", cum_time[i-1], "s")
 
-  print("Found ", int(numpy.sum(flags)), " primes")
+  print("Found ", int(numpy.sum(flags[flags == 2])/2), " primes")
+
 
 def worker():
   comm = MPI.COMM_WORLD
